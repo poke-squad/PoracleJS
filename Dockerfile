@@ -6,7 +6,7 @@ gnupg2 \
 git
 
 # PoracleJS
-RUN git clone https://github.com/KartulUdus/PoracleJS.git && cd PoracleJS && npm install
+RUN git clone https://github.com/poke-squad/PoracleJS.git -b develop && cd PoracleJS && npm install
 
 WORKDIR PoracleJS
 
