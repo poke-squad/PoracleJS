@@ -11,10 +11,10 @@ class Quest extends Controller {
 			areastring = areastring.concat(`or humans.area like '%"${area}"%' `)
 		})
 		let query = `
-		select humans.id, humans.name, humans.type, quest.distance, quest.clean, quest.ping, quest.template from quest
+		select humans.id, humans.name, humans.type, humans.latitude, humans.longitude, quest.distance, quest.clean, quest.ping, quest.template from quest
 		join humans on humans.id = quest.id
 		where humans.enabled = 1 and
-		((reward_type=7 and reward in (${data.rewardData.monsters}) and shiny = 1 and ${data.isShiny}=1 or reward_type=7 and reward in (${data.rewardData.monsters}) and shiny = 0)
+		(((reward_type=7 and reward in (${data.rewardData.monsters}) and shiny = 1 and ${data.isShiny}=1) or (reward_type=7 and reward in (${data.rewardData.monsters}) and shiny = 0))
 		or (reward_type = 2 and reward in (${data.rewardData.items}))
 		or (reward_type = 3 and reward <= ${data.dustAmount})
 		or (reward_type = 12 and reward <= ${data.energyAmount}))
@@ -23,23 +23,34 @@ class Quest extends Controller {
 		if (['pg', 'mysql'].includes(this.config.database.client)) {
 			query = query.concat(`
 			and
-			(round( 6371000 * acos( cos( radians(${data.latitude}) )
-			  * cos( radians( humans.latitude ) )
-			  * cos( radians( humans.longitude ) - radians(${data.longitude}) )
-			  + sin( radians(${data.latitude}) )
-			  * sin( radians( humans.latitude ) ) ) < quest.distance and quest.distance != 0) or
-			   quest.distance = 0 and (${areastring}))
-			group by humans.id, humans.name, quest.template`)
+			(
+				(
+					round(
+						6371000 
+						* acos(cos( radians(${data.latitude}) )
+						* cos( radians( humans.latitude ) )
+						* cos( radians( humans.longitude ) - radians(${data.longitude}) )
+						+ sin( radians(${data.latitude}) )
+						* sin( radians( humans.latitude ) ) 
+						) 
+					) < quest.distance and quest.distance != 0) 
+					or
+					(
+						quest.distance = 0 and (${areastring})
+					)
+			)
+			group by humans.id, humans.name, humans.type, humans.latitude, humans.longitude, quest.distance, quest.clean, quest.ping, quest.template
+			`)
 		} else {
 			query = query.concat(`
-				and (quest.distance = 0 and (${areastring}) or quest.distance > 0)
-				group by humans.id, humans.name, quest.template 
+				and ((quest.distance = 0 and (${areastring})) or quest.distance > 0)
+			group by humans.id, humans.name, humans.type, humans.latitude, humans.longitude, quest.distance, quest.clean, quest.ping, quest.template
 			`)
 		}
 
 		let result = await this.db.raw(query)
 		if (!['pg', 'mysql'].includes(this.config.database.client)) {
-			result = result.filter((res) => res.distance === 0 || res.distance > 0 && res.distance > this.getDistance({ lat: res.latitude, lon: res.longitude }, { lat: data.latitude, lon: data.longitude }))
+			result = result.filter((res) => +res.distance === 0 || +res.distance > 0 && +res.distance > this.getDistance({ lat: res.latitude, lon: res.longitude }, { lat: data.latitude, lon: data.longitude }))
 		}
 		result = this.returnByDatabaseType(result)
 		// remove any duplicates
@@ -260,7 +271,7 @@ class Quest extends Controller {
 					rewardString = rewardString.concat(rew)
 				} else if (reward.type === 12) {
 					const template = this.utilData.questRewardTypes['12']
-					const monster = Object.values(this.monsterData).find((mon) => mon.id === reward.info.pokemon_id && mon.form.id === 0)		
+					const monster = Object.values(this.monsterData).find((mon) => mon.id === reward.info.pokemon_id && mon.form.id === 0)
 					const mustache = this.mustache.compile(this.translator.translate(template))
 					const rew = mustache({ pokemon: this.translator.translate(monster.name), amount: reward.info.amount })
 					energyAmount = reward.info.amount

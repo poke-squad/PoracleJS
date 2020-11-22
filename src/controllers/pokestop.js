@@ -13,25 +13,35 @@ class Pokestop extends Controller {
 		let query = `
 		select humans.id, humans.name, humans.type, humans.latitude, humans.longitude, invasion.template, invasion.distance, invasion.clean, invasion.ping from invasion
 		join humans on humans.id = invasion.id
-		where humans.enabled = true and
-		(invasion.grunt_type='${data.gruntType}' or invasion.grunt_type = 'everything') and
+		where humans.enabled = 1 and
+		(invasion.grunt_type='${String(data.gruntType).toLowerCase()}' or invasion.grunt_type = 'everything') and
 		(invasion.gender = ${data.gender} or invasion.gender = 0)`
 
 		if (['pg', 'mysql'].includes(this.config.database.client)) {
 			query = query.concat(`
 			and
-			(round( 6371000 * acos( cos( radians(${data.latitude}) )
-				* cos( radians( humans.latitude ) )
-				* cos( radians( humans.longitude ) - radians(${data.longitude}) )
-				+ sin( radians(${data.latitude}) )
-				* sin( radians( humans.latitude ) ) ) < invasion.distance and invasion.distance != 0) or
-				invasion.distance = 0 and (${areastring}))
+			(
+				(
+					round(
+						6371000 
+						* acos(cos( radians(${data.latitude}) )
+						* cos( radians( humans.latitude ) )
+						* cos( radians( humans.longitude ) - radians(${data.longitude}) )
+						+ sin( radians(${data.latitude}) )
+						* sin( radians( humans.latitude ) ) 
+						) 
+					) < invasion.distance and invasion.distance != 0) 
+					or
+					(
+						invasion.distance = 0 and (${areastring})
+					)
+			)
 				group by humans.id, humans.name, humans.type, humans.latitude, humans.longitude, invasion.template, invasion.distance, invasion.clean, invasion.ping
 			`)
 		} else {
 			query = query.concat(`
-				and (invasion.distance = 0 and (${areastring}) or invasion.distance > 0)
-				group by humans.id, humans.name, invasion.template
+				and ((invasion.distance = 0 and (${areastring})) or invasion.distance > 0)
+				group by humans.id, humans.name, humans.type, humans.latitude, humans.longitude, invasion.template, invasion.distance, invasion.clean, invasion.ping
 			`)
 		}
 
@@ -110,11 +120,11 @@ class Pokestop extends Controller {
 			}
 
 			data.gruntTypeEmoji = '❓'
-			data.gruntTypeColor = '12595240'
+			data.gruntTypeColor = 'BABABA'
 
 			data.gender = 0
 			data.gruntName = ''
-			data.gruntTypeColor = '12595240'
+			data.gruntTypeColor = 'BABABA'
 			data.gruntRewards = ''
 
 			if (data.gruntTypeId) {

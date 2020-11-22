@@ -16,7 +16,7 @@ class Monster extends Controller {
 		select humans.id, humans.name, humans.type, humans.latitude, humans.longitude, monsters.template, monsters.distance, monsters.clean, monsters.ping from monsters
 		join humans on humans.id = monsters.id
 		where humans.enabled = true and
-		pokemon_id=${data.pokemon_id} and
+		(pokemon_id=${data.pokemon_id} or pokemon_id=0) and
 		min_iv<=${data.iv} and
 		max_iv>=${data.iv} and
 		min_cp<=${data.cp} and
@@ -37,24 +37,34 @@ class Monster extends Controller {
 		if (['pg', 'mysql'].includes(this.config.database.client)) {
 			query = query.concat(`
 			and
-			(round (6371000 * acos( cos( radians(${data.latitude}) )
-			  * cos( radians( humans.latitude ) )
-			  * cos( radians( humans.longitude ) - radians(${data.longitude}) )
-			  + sin( radians(${data.latitude}) )
-			  * sin( radians( humans.latitude ) ) ) < monsters.distance and monsters.distance != 0) or
-			   monsters.distance = 0 and (${areastring}))
+			(
+				(
+					round(					
+						6371000 
+						* acos(cos( radians(${data.latitude}) )
+						* cos( radians( humans.latitude ) )
+						* cos( radians( humans.longitude ) - radians(${data.longitude}) )
+						+ sin( radians(${data.latitude}) )
+						* sin( radians( humans.latitude ) ) 
+						) 
+					) < monsters.distance and monsters.distance != 0) 
+					or
+					(
+						monsters.distance = 0 and (${areastring})
+					)
+			)
 			   group by humans.id, humans.name, humans.type, humans.latitude, humans.longitude, monsters.template, monsters.distance, monsters.clean, monsters.ping
 			`)
 		} else {
 			query = query.concat(`
-				and (monsters.distance = 0 and (${areastring}) or monsters.distance > 0)
-				group by humans.id, humans.name, monsters.template 
+				and ((monsters.distance = 0 and (${areastring})) or monsters.distance > 0)
+			   group by humans.id, humans.name, humans.type, humans.latitude, humans.longitude, monsters.template, monsters.distance, monsters.clean, monsters.ping
 			`)
 		}
 		let result = await this.db.raw(query)
 
 		if (!['pg', 'mysql'].includes(this.config.database.client)) {
-			result = result.filter((res) => res.distance === 0 || +res.distance > 0 && +res.distance > this.getDistance({ lat: res.latitude, lon: res.longitude }, { lat: data.latitude, lon: data.longitude }))
+			result = result.filter((res) => +res.distance === 0 || +res.distance > 0 && +res.distance > this.getDistance({ lat: res.latitude, lon: res.longitude }, { lat: data.latitude, lon: data.longitude }))
 		}
 		result = this.returnByDatabaseType(result)
 		// remove any duplicates
